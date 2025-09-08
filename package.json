@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "test": "tsx test/outreach.test.ts"
+    "start": "tsx src/index.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
@@ -21,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
+    "@types/nodemailer": "^7.0.1",
     "@types/qrcode": "^1.5.5",
     "@types/sqlite3": "^3.1.11",
     "tsx": "^4.20.3",

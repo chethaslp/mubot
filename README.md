@@ -38,4 +38,4 @@ See `.env.example` for details.
 
 ---
 
-Built with ❤️ by µLearn Devs
+Built with ❤️ by @chethaslp for µLearn UCEK
