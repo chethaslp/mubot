@@ -15,6 +15,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/ubuntu/mubot
-            sudo git pull origin master
+            sudo git pull origin main
             sudo npm install
             sudo systemctl restart mubot.service
