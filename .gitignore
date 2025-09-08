@@ -1,0 +1,5 @@
+node_modules
+.env
+auth
+package-lock.json
+data
