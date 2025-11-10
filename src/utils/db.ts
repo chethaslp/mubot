@@ -73,6 +73,14 @@ async function initialize() {
       createdAt INTEGER,
       sent INTEGER DEFAULT 0
     );`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS banned_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chatId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        bannedAt INTEGER,
+        bannedBy TEXT,
+        UNIQUE(chatId, userId)
+    )`);
 }
 
 initialize();

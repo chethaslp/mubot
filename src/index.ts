@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import { messageQueue, ticketQueue, mailerQueue } from './queues/queue.js';
 import { setupQueueProcessors } from './queues/processors.js';
 import { ADMIN, getConfig, isUserAllowed } from './utils/config.js';
+import { loadBannedUsers } from './modules/ban.js';
 import os from 'os';
 import NodeCache from 'node-cache';
 import cors from '@fastify/cors'
@@ -50,7 +51,7 @@ const startSock = async () => {
         cachedGroupMetadata: async (jid) => cache.get(jid)
     });
 
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
         if (qr) {
             qrCode = qr;
             console.log('QR Code received, please scan it');
@@ -63,6 +64,8 @@ const startSock = async () => {
         } else if (connection === 'open') {
             console.log('Connection opened');
             setupQueueProcessors(sock);
+            // Load banned users into memory on startup
+            await loadBannedUsers();
         }
     });
 
