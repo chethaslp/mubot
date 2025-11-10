@@ -60,16 +60,15 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
   const senderId = msg.key.participant || msg.key.remoteJid!;
   const body = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
   
-  // Auto-delete messages from banned users
+  // Auto-delete messages from banned users (check first, before any async operations)
   if (isBanned(chatId, senderId)) {
-    try {
-      await client.sendMessage(chatId, {
-        delete: msg.key
-      });
-      console.log(`Deleted message from banned user ${senderId} in ${chatId}`);
-    } catch (error) {
+    // Delete immediately without waiting
+    client.sendMessage(chatId, {
+      delete: msg.key
+    }).catch(error => {
       console.error('Failed to delete message:', error);
-    }
+    });
+    console.log(`Deleted message from banned user ${senderId} in ${chatId}`);
     return; // Don't process commands from banned users
   }
   

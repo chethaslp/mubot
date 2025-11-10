@@ -73,6 +73,13 @@ const startSock = async () => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe || !msg.key.remoteJid) return;
 
+        // Ignore messages older than 15 seconds
+        const messageTimestamp = msg.messageTimestamp as number;
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        if (currentTimestamp - messageTimestamp > 15) {
+            return;
+        }
+
         const sender = msg.key.remoteJid.split('@')[0];
         if (sender !== ADMIN && !(await isUserAllowed(sender))) return;
 
