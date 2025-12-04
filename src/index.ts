@@ -4,7 +4,6 @@ import { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, useMultiFile
 import Fastify from 'fastify';
 import { config } from 'dotenv';
 import * as fs from 'fs/promises';
-import { messageQueue, ticketQueue, mailerQueue } from './queues/queue.js';
 import { setupQueueProcessors } from './queues/processors.js';
 import { ADMIN, getConfig, isUserAllowed } from './utils/config.js';
 import { loadBannedUsers } from './modules/ban.js';

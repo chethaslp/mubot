@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
-    "@whiskeysockets/baileys": "^6.7.0",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.4.0",
