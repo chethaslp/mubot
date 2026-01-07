@@ -11,11 +11,11 @@ import os from 'os';
 import NodeCache from 'node-cache';
 import cors from '@fastify/cors'
 
-const port = 3001;
+config();
 let qrCode: string | null = null;
 const messageHandlers: ((sock: WASocket, msg: WAMessage) => Promise<void>)[] = [];
 let sock: WASocket;
-config();
+const port = process.env.PORT || 3001;
 
 const app = Fastify({ logger: false });
 app.register(cors, {
