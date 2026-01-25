@@ -5,85 +5,108 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
     const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
     if (!body) return;
 
-    const chatId = msg.key.remoteJid!;
+    // Match @mentions
+    if (!body.match(/@([a-zA-Z]+)/)) return;
     
-    if (['@everyone', '@all', '@leads', '@ops', '@operations', '@creative', '@marketing', '@ig', '@tech', '@content', '@community'].some(mention => body.includes(mention))) {
-        let q: string | undefined;
-        let found = false;
-        let team: string[] = [];
+    const chatId = msg.key.remoteJid!;
 
-        // Send typing indicator
-        await client.sendPresenceUpdate('composing', chatId);
+    // Send typing indicator
+    await client.sendPresenceUpdate('composing', chatId);
 
-        if (body.includes('@everyone') || body.includes('@all')) {
-            const metadata = await client.groupMetadata(chatId);
-            const mentions = metadata.participants.map(p => p.id);
-            
-            // Check if message is a reply to another message
-            const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            
-            if (quotedMessage) {
-                // Reply to the quoted message
-                await client.sendMessage(chatId, {
-                    text: '@everyone',
-                    mentions
-                }, {
-                    quoted: msg
-                });
-            } else {
-                await client.sendMessage(chatId, {
-                    text: '@everyone',
-                    mentions
-                });
-            }
+    if (body.includes('@everyone') || body.includes('@all')) {
+        const metadata = await client.groupMetadata(chatId);
+        const mentions = metadata.participants.map(p => p.id);
+        
+        // Check if message is a reply to another message
+        const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        if (quotedMessage) {
+            // Reply to the quoted message
+            await client.sendMessage(chatId, {
+                text: '@everyone',
+                mentions
+            }, {
+                quoted: msg
+            });
         } else {
-            let conditions: string[] = [];
-            if (body.includes('@leads')) { conditions.push("(E = 'Lead' or E = 'IG Manager' or F = 'μ')"); team.push('@leads') }
-            if (body.includes('@ops') || body.includes('@operations')) { conditions.push("F = 'Operations'"); team.push('@ops') }
-            if (body.includes('@creative')) { conditions.push("F = 'Creative'"); team.push('@creative') }
-            if (body.includes('@marketing')) { conditions.push("F = 'Marketing'"); team.push('@marketing') }
-            if (body.includes('@ig')) { conditions.push("F = 'Interest Group'"); team.push('@ig') }
-            if (body.includes('@tech')) { conditions.push("F = 'Technical'"); team.push('@tech') }
-            if (body.includes('@content')) { conditions.push("F = 'Content'"); team.push('@content') }
-            if (body.includes('@community')) { conditions.push("F = 'Community'"); team.push('@community') }
+            await client.sendMessage(chatId, {
+                text: '@everyone',
+                mentions
+            });
+        }
+    } else {
+        if(!process.env.SHEET_URL) return;
 
-            if (conditions.length > 0) {
-                q = encodeURIComponent("select I where " + conditions.join(" or "));
-                found = true;
+        const matches = body.match(/@([a-zA-Z]+)/g);
+        const teams = matches ? matches.map(m => m.replace('@', '')) : [];
+
+        const fetchPromises = teams.map(q => fetch(process.env.SHEET_URL! + q));
+        const responses = await Promise.all(fetchPromises);
+
+        let allPhones: string[] = [];
+        
+        for (const response of responses) {
+            if (response.ok) {
+                const text = await response.text();
+                // Parse CSV - simple split by line, skipping header
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                
+                const startIndex = lines[0]?.toLowerCase().includes('phone') ? 1 : 0;
+                
+                for (let i = startIndex; i < lines.length; i++) {
+                    const parts = lines[i].split(',');
+                    const phone = parts[1]?.trim(); 
+                    if (phone) {
+                        allPhones.push(phone);
+                    }
+                }
             }
         }
 
-        if (found && q && process.env.SHEET_URL) {
-            try {
-                const response = await fetch(process.env.SHEET_URL + q);
-                const data = await response.text();
-                console.log(data);
-                
-                const phoneNumbers = data.replaceAll('"', "").replace('Phone\n', "").split("\n").filter(p => p.trim());
-                const mentions = phoneNumbers.map(p => p + '@c.us');
+        if (allPhones.length === 0) return;
 
-                const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-                
-                if (quotedMessage) {
-                    // Reply to the quoted message
+        // Deduplicate and clean phone numbers
+        const cleanPhones = [...new Set(allPhones)];
+        
+        // Fetch LIDs
+        const result = await client.signalRepository.lidMapping.getLIDsForPNs(cleanPhones);
+        if (!result) return;
+        
+        const mentions = Object.values(result)
+            .filter((lid) => Boolean(lid.lid))
+            .map((lid) => lid.lid! + '@lid');
+
+        if (mentions.length > 0) {
+            const quotedMessage = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+
+                if (quotedMessage && contextInfo) {
+                    // Reconstruct the message object for the quoted message to reply to it
+                    const quotedMsgObj: WAMessage = {
+                        key: {
+                            remoteJid: chatId,
+                            fromMe: contextInfo.participant === client.user?.id,
+                            id: contextInfo.stanzaId,
+                            participant: contextInfo.participant
+                        },
+                        message: quotedMessage
+                    };
+
                     await client.sendMessage(chatId, {
-                        text: team.join(" "),
+                        text: teams.map(t => '@' + t).join(' '),
                         mentions
                     }, {
-                        quoted: msg
+                        quoted: quotedMsgObj
                     });
                 } else {
                     await client.sendMessage(chatId, {
-                        text: team.join(" "),
+                        text: teams.map(t => '@' + t).join(' '),
                         mentions
                     });
                 }
-            } catch (error) {
-                console.error('Error fetching team data:', error);
-            }
         }
-        
+
+    }
         // Stop typing indicator
         await client.sendPresenceUpdate('paused', chatId);
-    }
 };
