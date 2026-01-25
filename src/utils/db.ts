@@ -2,6 +2,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import fs from 'fs';
+import navCrypto from 'crypto';
 
 const dataPath = path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataPath)) fs.mkdirSync(dataPath, { recursive: true });
@@ -35,6 +36,17 @@ const dbGet = <T = any>(sql: string, params: any[] = []): Promise<T | undefined>
         });
     });
 };
+
+function hashPassword(password: string, salt: string): string {
+    return navCrypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
+export async function verifyUser(password: string): Promise<boolean> {
+    const user = await dbGet('SELECT * FROM users WHERE username = ?', ['admin']);
+    if (!user) return false;
+    const hash = hashPassword(password, user.salt);
+    return hash === user.password;
+}
 
 async function initialize() {
     await dbRun(`CREATE TABLE IF NOT EXISTS jobs (
@@ -81,6 +93,20 @@ async function initialize() {
         bannedBy TEXT,
         UNIQUE(chatId, userId)
     )`);
+
+    await dbRun(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        salt TEXT
+    )`);
+
+    const admin = await dbGet('SELECT * FROM users WHERE username = ?', ['admin']);
+    if (!admin) {
+        const salt = navCrypto.randomBytes(16).toString('hex');
+        const hash = hashPassword('mubot@clp123', salt);
+        await dbRun('INSERT INTO users (username, password, salt) VALUES (?, ?, ?)', ['admin', hash, salt]);
+    }
 }
 
 initialize();
