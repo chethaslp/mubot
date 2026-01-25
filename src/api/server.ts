@@ -68,12 +68,20 @@ export const startServer = async (context: BotContext) => {
         const sock = context.getSock();
         const qr = context.getQrCode();
         
-        const isConnected = sock?.ws?.isOpen;
-        const qrDataUrl = qr ? await QRCode.toDataURL(qr) : null;
+        // Priority: If QR exists, we are in scanning mode
+        if (qr) {
+            return {
+                status: 'qr',
+                qrCode: await QRCode.toDataURL(qr)
+            };
+        }
+
+        // We are connected only if socket is open AND we have user details (meaning auth is successful)
+        const isConnected = sock?.ws?.isOpen && !!sock?.user;
 
         return {
-            status: isConnected ? 'connected' : (qr ? 'qr' : 'connecting'),
-            qrCode: qrDataUrl
+            status: isConnected ? 'connected' : 'connecting',
+            qrCode: null
         };
     });
 
