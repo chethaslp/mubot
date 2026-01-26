@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+        h1 { text-align: center; color: #333; }
+        .config-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        input { 
+            flex: 1;
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .btn-add { background-color: #25d366; }
+        .btn-save { background-color: #25d366; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-back { background-color: #6c757d; margin-bottom: 20px; display: inline-block; text-decoration: none; text-align: center; }
+        button:hover { opacity: 0.9; }
+        #config-list { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/dashboard" class="btn-back button" style="padding: 10px 20px; color: white; border-radius: 4px;">Back to Dashboard</a>
+        <h1>Configuration</h1>
+        
+        <div class="input-group">
+            <h3>Add New Config</h3>
+            <div class="config-item">
+                <input type="text" id="new-key" placeholder="Key">
+                <input type="text" id="new-val" placeholder="Value">
+                <button class="btn-add" onclick="addConfig()">Add</button>
+            </div>
+        </div>
+
+        <div id="config-list"></div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('mubot_token');
+        if (!token) window.location.href = '/dashboard';
+
+        async function api(url, method = 'GET', body = null) {
+            const headers = {
+                'Authorization': `Bearer ${token}`
+            };
+            if (body) {
+                headers['Content-Type'] = 'application/json';
+            }
+            const res = await fetch(url, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null
+            });
+            if (res.status === 401) {
+                window.location.href = '/dashboard';
+                return null;
+            }
+            return res.json();
+        }
+
+        async function loadConfig() {
+            const config = await api('/api/config');
+            if (!config) return;
+            
+            const container = document.getElementById('config-list');
+            container.innerHTML = '';
+            // sort by key
+            config.sort((a, b) => a.id.localeCompare(b.id));
+
+            for (const item of config) {
+                const div = document.createElement('div');
+                div.className = 'config-item';
+                div.innerHTML = `
+                    <input type="text" value="${item.id}" readonly style="background: #f9f9f9;">
+                    <input type="text" value="${item.value}" id="val-${item.id}">
+                    <button class="btn-save" onclick="updateConfig('${item.id}')">Save</button>
+                    <button class="btn-delete" onclick="deleteConfig('${item.id}')">Delete</button>
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        async function addConfig() {
+            const key = document.getElementById('new-key').value;
+            const value = document.getElementById('new-val').value;
+            if (!key || !value) return alert('Key and Value are required');
+            
+            await api('/api/config', 'POST', { key, value });
+            document.getElementById('new-key').value = '';
+            document.getElementById('new-val').value = '';
+            loadConfig();
+        }
+
+        async function updateConfig(key) {
+            const value = document.getElementById(`val-${key}`).value;
+            await api('/api/config', 'POST', { key, value });
+            alert('Updated!');
+        }
+
+        async function deleteConfig(key) {
+            if(!confirm('Delete ' + key + '?')) return;
+            await api(`/api/config/${key}`, 'DELETE');
+            loadConfig();
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

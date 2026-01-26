@@ -5,7 +5,7 @@ import * as path from 'path';
 import QRCode from 'qrcode';
 import { WASocket } from '@whiskeysockets/baileys';
 import { verifyUser } from '../utils/db.js';
-import { getConfig } from '../utils/config.js';
+import { getConfig, getAllConfigs, setConfig, deleteConfig } from '../utils/config.js';
 import crypto from 'crypto';
 import os from 'os';
 
@@ -29,7 +29,12 @@ export const startServer = async (context: BotContext) => {
     });
 
     app.get('/dashboard', async (request, reply) => {
-        const html = await fs.readFile(path.join(process.cwd(), 'dashboard', 'index.html'), 'utf-8');
+        const html = await fs.readFile(path.join(process.cwd(), 'src','dashboard', 'index.html'), 'utf-8');
+        reply.type('text/html').send(html);
+    });
+
+    app.get('/dashboard/config', async (request, reply) => {
+        const html = await fs.readFile(path.join(process.cwd(), 'src', 'dashboard', 'config.html'), 'utf-8');
         reply.type('text/html').send(html);
     });
 
@@ -61,6 +66,26 @@ export const startServer = async (context: BotContext) => {
         }
         return true;
     };
+
+    app.get('/api/config', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        return await getAllConfigs();
+    });
+
+    app.post('/api/config', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        const { key, value } = request.body as { key: string, value: string };
+        if (!key || !value) return reply.code(400).send({ error: 'Key and value required' });
+        await setConfig(key, value);
+        return { success: true };
+    });
+
+    app.delete('/api/config/:key', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        const { key } = request.params as { key: string };
+        await deleteConfig(key);
+        return { success: true };
+    });
 
     app.get('/api/bot-status', async (request, reply) => {
         if (!checkAuth(request, reply)) return;

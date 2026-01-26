@@ -1,7 +1,11 @@
 
-import { dbGet, dbRun } from './db.js';
+import { dbAll, dbGet, dbRun } from './db.js';
 
 export const ADMIN = process.env.ADMIN;
+
+export async function getAllConfigs(): Promise<{ id: string, value: string }[]> {
+    return await dbAll('SELECT id, value FROM config');
+}
 
 export async function getConfig(key: string): Promise<string | null> {
     const row = await dbGet(`SELECT value FROM config WHERE id = ?`, [key]);
@@ -13,6 +17,16 @@ export async function setConfig(key: string, value: string): Promise<boolean> {
         const now = Date.now();
         await dbRun(`INSERT OR REPLACE INTO config (id, value, createdAt) VALUES (?, ?, ?)`,
             [key, value, now]);
+        return true;
+    } catch (e) {
+        console.error(e);
+        return false;
+    }
+}
+
+export async function deleteConfig(key: string): Promise<boolean> {
+    try {
+        await dbRun('DELETE FROM config WHERE id = ?', [key]);
         return true;
     } catch (e) {
         console.error(e);
