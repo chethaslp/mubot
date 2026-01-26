@@ -72,24 +72,20 @@
     </div>
 
     <div id="dashboard-view" class="container hidden">
-        <h1>Bot Groups</h1>
+        <h1>Dashboard</h1>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button onclick="location.href='/dashboard/groups'" style="background-color: #007bff;">Groups Management</button>
+            <button onclick="location.href='/dashboard/modules'" style="background-color: #6610f2;">Modules Management</button>
+            <button onclick="location.href='/dashboard/config'" style="background-color: #17a2b8;">Configuration</button>
+        </div>
+        
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+        
         <div style="text-align: right; margin-bottom: 10px;">
-            <button onclick="location.href='/dashboard/config'" style="width: auto; background-color: #17a2b8; margin-right: 10px;">Config</button>
             <button onclick="logoutWhatsApp()" style="width: auto; background-color: #ffc107; color: black; margin-right: 10px;">Disconnect WhatsApp</button>
             <button onclick="logout()" style="width: auto; background-color: #dc3545;">Logout Dashboard</button>
         </div>
-        <div id="loading">Loading groups...</div>
-        <table id="groups-table" class="hidden">
-            <thead>
-                <tr>
-                    <th>Subject</th>
-                    <th>Participants</th>
-                    <th>Created</th>
-                    <th>ID</th>
-                </tr>
-            </thead>
-            <tbody id="groups-body"></tbody>
-        </table>
     </div>
 
     <div id="qr-view" class="container hidden">
@@ -188,34 +184,10 @@
                 }
 
                 showView('dashboard-view');
-                const res = await fetch(`${API_URL}/api/groups`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (res.status === 401) return logout();
                 
-                const groups = await res.json();
-                const tbody = document.getElementById('groups-body');
-                tbody.innerHTML = '';
-                
-                groups.forEach(g => {
-                    const date = new Date(g.creation * 1000).toLocaleDateString();
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${g.subject}</td>
-                        <td>${g.participants}</td>
-                        <td>${date}</td>
-                        <td style="font-size: 0.8em; color: gray;">${g.id}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-                
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('groups-table').classList.remove('hidden');
-
             } catch (e) {
                 console.error(e);
-                document.getElementById('loading').textContent = 'Failed to load groups.';
+                alert('Failed to load dashboard.');
             }
         }
 

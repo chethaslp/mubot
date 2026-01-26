@@ -64,6 +64,16 @@ async function initialize() {
         chatId TEXT PRIMARY KEY,
         createdAt INTEGER
     )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS group_settings (
+        chatId TEXT PRIMARY KEY,
+        archived INTEGER DEFAULT 0,
+        createdAt INTEGER
+    )`);
+    await dbRun(`CREATE TABLE IF NOT EXISTS modules (
+        name TEXT PRIMARY KEY,
+        enabled INTEGER DEFAULT 1,
+        createdAt INTEGER
+    )`);
     await dbRun(`CREATE TABLE IF NOT EXISTS config (
         id TEXT PRIMARY KEY,
         value TEXT,

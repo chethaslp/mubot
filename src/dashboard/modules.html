@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mubot Modules</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 { text-align: center; color: #333; }
+        .hidden { display: none; }
+        .btn-back { background-color: #6c757d; margin-bottom: 20px; display: inline-block; text-decoration: none; text-align: center; padding: 10px 20px; border-radius: 4px; color: white; }
+        .btn-back:hover { opacity: 0.9; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        th { background-color: #f8f9fa; }
+        tr:hover { background-color: #f5f5f5; }
+
+        /* Toggle Switch */
+        .switch {
+          position: relative;
+          display: inline-block;
+          width: 50px;
+          height: 24px;
+        }
+        .switch input { 
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #ccc;
+          -webkit-transition: .4s;
+          transition: .4s;
+          border-radius: 24px;
+        }
+        .slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 3px;
+          bottom: 3px;
+          background-color: white;
+          -webkit-transition: .4s;
+          transition: .4s;
+          border-radius: 50%;
+        }
+        input:checked + .slider {
+          background-color: #25d366;
+        }
+        input:focus + .slider {
+          box-shadow: 0 0 1px #25d366;
+        }
+        input:checked + .slider:before {
+          -webkit-transform: translateX(26px);
+          -ms-transform: translateX(26px);
+          transform: translateX(26px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <a href="/dashboard" class="btn-back">Back to Dashboard</a>
+        <h1>Modules Management</h1>
+        <div id="loading">Loading modules...</div>
+        <table id="modules-table" class="hidden">
+            <thead>
+                <tr>
+                    <th>Enabled</th>
+                    <th>Module Name</th>
+                </tr>
+            </thead>
+            <tbody id="modules-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('mubot_token');
+        if (!token) window.location.href = '/dashboard';
+
+        async function api(url, method = 'GET', body = null) {
+            const headers = {
+                'Authorization': `Bearer ${token}`
+            };
+            if (body) {
+                headers['Content-Type'] = 'application/json';
+            }
+            const res = await fetch(url, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null
+            });
+            if (res.status === 401) {
+                window.location.href = '/dashboard';
+                return null;
+            }
+            return res.json();
+        }
+
+        async function loadModules() {
+            try {
+                const modules = await api('/api/modules');
+                if (!modules) return;
+                
+                const tbody = document.getElementById('modules-body');
+                tbody.innerHTML = '';
+                
+                modules.sort((a, b) => a.name.localeCompare(b.name));
+
+                modules.forEach(m => {
+                    const tr = document.createElement('tr');
+                    const isChecked = m.enabled ? 'checked' : '';
+                    
+                    tr.innerHTML = `
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox" onchange="toggleModule('${m.name}', this)" ${isChecked}>
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td>${m.name}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('modules-table').classList.remove('hidden');
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loading').textContent = 'Failed to load modules.';
+            }
+        }
+
+        async function toggleModule(name, checkbox) {
+            const enabled = checkbox.checked;
+            try {
+                await api(`/api/modules/${name}/toggle`, 'POST', { enabled });
+            } catch (e) {
+                console.error(e);
+                checkbox.checked = !checkbox.checked;
+                alert('Failed to update module status');
+            }
+        }
+
+        loadModules();
+    </script>
+</body>
+</html>

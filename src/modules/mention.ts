@@ -55,7 +55,7 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
                 
                 for (let i = startIndex; i < lines.length; i++) {
                     const parts = lines[i].split(',');
-                    const phone = parts[1]?.trim(); 
+                    const phone = parts[1]?.trim().replaceAll('"', '') + '@s.whatsapp.net';
                     if (phone) {
                         allPhones.push(phone);
                     }
@@ -67,9 +67,11 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
 
         // Deduplicate and clean phone numbers
         const cleanPhones = [...new Set(allPhones)];
+        console.log('Mentioning phones:', cleanPhones);
         
         // Fetch LIDs
         const result = await client.signalRepository.lidMapping.getLIDsForPNs(cleanPhones);
+        console.log('LID Mapping Result:', result);
         if (!result) return;
         
         const mentions = Object.values(result)

@@ -3,13 +3,17 @@ import { makeWASocket, DisconnectReason, fetchLatestBaileysVersion, useMultiFile
 import { config } from 'dotenv';
 import * as fs from 'fs/promises';
 import { setupQueueProcessors } from './queues/processors.js';
-import { ADMIN, getConfig, isUserAllowed } from './utils/config.js';
+import { ADMIN, getConfig, isUserAllowed, isGroupArchived, getModuleStatus } from './utils/config.js';
 import { loadBannedUsers } from './modules/ban.js';
 import NodeCache from 'node-cache';
 import { startServer } from './api/server.js';
 
 let qrCode: string | null = null;
-const messageHandlers: ((sock: WASocket, msg: WAMessage) => Promise<void>)[] = [];
+interface ModuleHandler {
+    name: string;
+    handler: (sock: WASocket, msg: WAMessage) => Promise<void>;
+}
+const messageHandlers: ModuleHandler[] = [];
 let sock: WASocket;
 config();
 
@@ -21,7 +25,8 @@ const loadModules = async () => {
                 const module = await import(`./modules/${file}`);
                 const command = module.default || module;
                 if (command && typeof command.handleMessage === 'function') {
-                    messageHandlers.push(command.handleMessage);
+                    const name = file.replace('.ts', '');
+                    messageHandlers.push({ name, handler: command.handleMessage });
                 }
             }
         });
@@ -76,12 +81,20 @@ const startSock = async () => {
         }
 
         const sender = msg.key.remoteJid.split('@')[0];
+        const remoteJid = msg.key.remoteJid;
+        
+        if (await isGroupArchived(remoteJid)) {
+            return;
+        }
+
         if (sender !== ADMIN && !(await isUserAllowed(sender))) return;
 
         console.log(`${sender} => ${JSON.stringify(msg.message)}`);
-        for (const handler of messageHandlers) {
+        for (const { name, handler } of messageHandlers) {
             try {
-                await handler(sock, msg);
+                if (await getModuleStatus(name)) {
+                    await handler(sock, msg);
+                }
             } catch (e) {
                 console.error(e);
             }

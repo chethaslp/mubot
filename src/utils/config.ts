@@ -34,6 +34,47 @@ export async function deleteConfig(key: string): Promise<boolean> {
     }
 }
 
+export async function isGroupArchived(chatId: string): Promise<boolean> {
+    const row = await dbGet(`SELECT archived FROM group_settings WHERE chatId = ?`, [chatId]);
+    return row?.archived === 1;
+}
+
+export async function setGroupArchived(chatId: string, archived: boolean): Promise<boolean> {
+    try {
+        const now = Date.now();
+        await dbRun(`INSERT OR REPLACE INTO group_settings (chatId, archived, createdAt) VALUES (?, ?, ?)`,
+            [chatId, archived ? 1 : 0, now]);
+        return true;
+    } catch (e) {
+        console.error(e);
+        return false;
+    }
+}
+
+// Module Management
+export async function getModuleStatus(name: string): Promise<boolean> {
+    const row = await dbGet(`SELECT enabled FROM modules WHERE name = ?`, [name]);
+    // Default to true if not found (new modules are enabled by default)
+    return row ? row.enabled === 1 : true;
+}
+
+export async function setModuleStatus(name: string, enabled: boolean): Promise<boolean> {
+    try {
+        const now = Date.now();
+        await dbRun(`INSERT OR REPLACE INTO modules (name, enabled, createdAt) VALUES (?, ?, ?)`,
+            [name, enabled ? 1 : 0, now]);
+        return true;
+    } catch (e) {
+        console.error(e);
+        return false;
+    }
+}
+
+export async function getAllModulesStatus(): Promise<{ name: string, enabled: boolean }[]> {
+    const rows = await dbAll('SELECT name, enabled FROM modules');
+    return rows.map(r => ({ name: r.name, enabled: r.enabled === 1 }));
+}
+
 export async function isUserAllowed(chatId: string): Promise<boolean> {
     if (!chatId) return false;
     const everyoneAllowed = await getConfig('everyoneAllowed');

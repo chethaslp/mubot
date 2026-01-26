@@ -5,7 +5,7 @@ import * as path from 'path';
 import QRCode from 'qrcode';
 import { WASocket } from '@whiskeysockets/baileys';
 import { verifyUser } from '../utils/db.js';
-import { getConfig, getAllConfigs, setConfig, deleteConfig } from '../utils/config.js';
+import { getConfig, getAllConfigs, setConfig, deleteConfig, isGroupArchived, setGroupArchived, setModuleStatus, getModuleStatus } from '../utils/config.js';
 import crypto from 'crypto';
 import os from 'os';
 
@@ -35,6 +35,16 @@ export const startServer = async (context: BotContext) => {
 
     app.get('/dashboard/config', async (request, reply) => {
         const html = await fs.readFile(path.join(process.cwd(), 'src', 'dashboard', 'config.html'), 'utf-8');
+        reply.type('text/html').send(html);
+    });
+
+    app.get('/dashboard/groups', async (request, reply) => {
+        const html = await fs.readFile(path.join(process.cwd(), 'src', 'dashboard', 'groups.html'), 'utf-8');
+        reply.type('text/html').send(html);
+    });
+
+    app.get('/dashboard/modules', async (request, reply) => {
+        const html = await fs.readFile(path.join(process.cwd(), 'src', 'dashboard', 'modules.html'), 'utf-8');
         reply.type('text/html').send(html);
     });
 
@@ -118,17 +128,54 @@ export const startServer = async (context: BotContext) => {
 
         try {
             const groups = await sock.groupFetchAllParticipating();
-            return Object.values(groups).map((g: any) => ({
+            const result = await Promise.all(Object.values(groups).map(async (g: any) => ({
                 id: g.id,
                 subject: g.subject,
                 participants: g.participants.length,
-                creation: g.creation
-            }));
+                creation: g.creation,
+                archived: await isGroupArchived(g.id)
+            })));
+            return result;
         } catch (error) {
             console.error('Error fetching groups:', error);
             // If fetching groups fails, we might check if we are actually connected
             return reply.code(500).send({ error: 'Failed to fetch groups' });
         }
+    });
+
+    app.post('/api/groups/:id/archive', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        const { id } = request.params as { id: string };
+        const { archived } = request.body as { archived: boolean };
+        await setGroupArchived(id, archived);
+        return { success: true };
+    });
+
+    app.get('/api/modules', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        try {
+            const files = await fs.readdir("./src/modules");
+            const modules: Promise<{ name: string, enabled: boolean }>[] = [];
+            
+            for (const file of files) {
+                if (file.endsWith('.ts')) {
+                    const name = file.replace('.ts', '');
+                    modules.push(getModuleStatus(name).then((enabled: boolean) => ({ name, enabled })));
+                }
+            }
+            return await Promise.all(modules);
+        } catch (e) {
+            console.error(e);
+            return reply.code(500).send({ error: 'Failed' });
+        }
+    });
+
+    app.post('/api/modules/:name/toggle', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        const { name } = request.params as { name: string };
+        const { enabled } = request.body as { enabled: boolean };
+        await setModuleStatus(name, enabled);
+        return { success: true };
     });
 
     app.post('/api/logout-session', async (request, reply) => {
