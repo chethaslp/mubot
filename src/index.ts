@@ -14,19 +14,23 @@ let sock: WASocket;
 config();
 
 const loadModules = async () => {
-    fs.readdir("./src/modules").then((files:string[]) => {
-        files.forEach((file) => {
+    try {
+        const files = await fs.readdir("./src/modules");
+        const imports = files.map(async (file) => {
             if (file.endsWith('.ts')) {
-                import(`./modules/${file}`).then((module) => {
-                    const command = module.default || module;
-                    if (command && typeof command.handleMessage === 'function') {
-                        messageHandlers.push(command.handleMessage);
-                    }
-                });
+                const module = await import(`./modules/${file}`);
+                const command = module.default || module;
+                if (command && typeof command.handleMessage === 'function') {
+                    messageHandlers.push(command.handleMessage);
+                }
             }
         });
+        
+        await Promise.all(imports);
         console.log(`[!] => Loaded ${messageHandlers.length} message handlers`);
-    });
+    } catch (error) {
+        console.error('Error loading modules:', error);
+    }
 };
 
 const startSock = async () => {
