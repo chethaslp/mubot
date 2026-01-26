@@ -106,6 +106,23 @@ export const startServer = async (context: BotContext) => {
         }
     });
 
+    app.post('/api/logout-session', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+
+        const sock = context.getSock();
+        if (sock) {
+            try {
+                await sock.logout();
+                return { success: true };
+            } catch (error) {
+                console.error('Error logging out:', error);
+                return reply.code(500).send({ error: 'Failed to logout session' });
+            }
+        } else {
+            return reply.code(400).send({ error: 'No active session' });
+        }
+    });
+
     app.get('/status', async (request, reply) => {
         const sock = context.getSock();
         return reply.send({ uptime: {

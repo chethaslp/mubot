@@ -74,7 +74,8 @@
     <div id="dashboard-view" class="container hidden">
         <h1>Bot Groups</h1>
         <div style="text-align: right; margin-bottom: 10px;">
-            <button onclick="logout()" style="width: auto; background-color: #dc3545;">Logout</button>
+            <button onclick="logoutWhatsApp()" style="width: auto; background-color: #ffc107; color: black; margin-right: 10px;">Disconnect WhatsApp</button>
+            <button onclick="logout()" style="width: auto; background-color: #dc3545;">Logout Dashboard</button>
         </div>
         <div id="loading">Loading groups...</div>
         <table id="groups-table" class="hidden">
@@ -134,6 +135,30 @@
         function logout() {
             localStorage.removeItem('mubot_token');
             showView('login-view');
+        }
+
+        async function logoutWhatsApp() {
+            if (!confirm('Are you sure you want to disconnect the WhatsApp session? The bot will stop working until re-scanned.')) return;
+
+            const token = localStorage.getItem('mubot_token');
+            if (!token) return logout();
+
+            try {
+                const res = await fetch(`${API_URL}/api/logout-session`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.ok) {
+                    alert('WhatsApp session disconnected successfully.');
+                    loadDashboard(); // Will redirect to QR view
+                } else {
+                    alert('Failed to disconnect session.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error.');
+            }
         }
 
         async function loadDashboard() {
