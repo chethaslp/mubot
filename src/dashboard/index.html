@@ -78,6 +78,7 @@
             <button onclick="location.href='/dashboard/groups'" style="background-color: #007bff;">Groups Management</button>
             <button onclick="location.href='/dashboard/modules'" style="background-color: #6610f2;">Modules Management</button>
             <button onclick="location.href='/dashboard/config'" style="background-color: #17a2b8;">Configuration</button>
+            <button onclick="triggerBirthdayCheck()" style="background-color: #e83e8c;">🎂 Run Birthday Check Now</button>
         </div>
         
         <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
@@ -132,6 +133,27 @@
         function logout() {
             localStorage.removeItem('mubot_token');
             showView('login-view');
+        }
+
+        async function triggerBirthdayCheck() {
+            if (!confirm('Run birthday check now? This will send wishes for any birthdays that fall tomorrow.')) return;
+            const token = localStorage.getItem('mubot_token');
+            if (!token) return logout();
+            try {
+                const res = await fetch(`${API_URL}/api/birthday/trigger`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('Birthday check completed successfully!');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error.');
+            }
         }
 
         async function logoutWhatsApp() {

@@ -15,6 +15,7 @@ const sessions = new Map<string, number>();
 export interface BotContext {
     getSock: () => WASocket | undefined;
     getQrCode: () => string | null;
+    triggerBirthdayCheck?: () => Promise<void>;
 }
 
 export const startServer = async (context: BotContext) => {
@@ -176,6 +177,19 @@ export const startServer = async (context: BotContext) => {
         const { enabled } = request.body as { enabled: boolean };
         await setModuleStatus(name, enabled);
         return { success: true };
+    });
+
+    app.post('/api/birthday/trigger', async (request, reply) => {
+        if (!checkAuth(request, reply)) return;
+        const fn = context.triggerBirthdayCheck;
+        if (!fn) return reply.code(503).send({ error: 'Birthday checker not initialised' });
+        try {
+            await fn();
+            return { success: true };
+        } catch (err) {
+            console.error('[birthday] Manual trigger failed:', err);
+            return reply.code(500).send({ error: 'Birthday check failed' });
+        }
     });
 
     app.post('/api/logout-session', async (request, reply) => {

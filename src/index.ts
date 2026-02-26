@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import { setupQueueProcessors } from './queues/processors.js';
 import { ADMIN, getConfig, isUserAllowed, isGroupArchived, getModuleStatus } from './utils/config.js';
 import { loadBannedUsers } from './modules/ban.js';
+import { scheduleBirthdayChecker, checkAndSendBirthdays } from './modules/birthday.js';
 import NodeCache from 'node-cache';
 import { startServer } from './api/server.js';
 
@@ -66,6 +67,8 @@ const startSock = async () => {
             setupQueueProcessors(sock);
             // Load banned users into memory on startup
             await loadBannedUsers();
+            // Register daily 11:59 PM birthday cron
+            scheduleBirthdayChecker(sock);
         }
     });
 
@@ -109,7 +112,8 @@ const startSock = async () => {
     await loadModules();
     await startServer({
         getSock: () => sock,
-        getQrCode: () => qrCode
+        getQrCode: () => qrCode,
+        triggerBirthdayCheck: () => checkAndSendBirthdays(sock)
     });
     startSock();
 })();
