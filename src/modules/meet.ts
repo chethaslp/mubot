@@ -1,7 +1,6 @@
 
 import { WASocket, WAMessage } from '@whiskeysockets/baileys';
 import fs from 'fs/promises';
-import path from 'path';
 
 export const handleMessage = async (client: WASocket, msg: WAMessage) => {
     const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
@@ -13,18 +12,6 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
 
     let team = args[0];
     if (!team) return client.sendMessage(chatId, { text: 'Please provide a team specifier.' });
-
-    const teamMap: Record<string, string> = {
-        ops: 'Operations', operations: 'Operations',
-        creative: 'Creative', marketing: 'Marketing',
-        ig: 'Interest Group', tech: 'Technical',
-        content: 'Content', leads: 'Leads',
-        community: 'Community', test: 'Test',
-        all: 'All'
-    };
-
-    if (!teamMap[team.toLowerCase()]) return client.sendMessage(chatId, { text: 'Please provide a valid team specifier.' });
-    team = teamMap[team.toLowerCase()];
 
     let dateArg = args[1];
     let date = new Date();
@@ -55,44 +42,53 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
 
     date.setHours(hours, minutes, 0);
 
+    // Build the datetime as an explicit IST timestamp so it is server-timezone-agnostic
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const istDate = new Date(
+        `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(hours)}:${pad(minutes)}:00+05:30`
+    );
+
     const title = args[3] ? args[3].replaceAll('_', ' ') : 'Meeting';
-    const params = new URLSearchParams({ team, dt: date.toISOString(), title });
 
-    let query = '';
-    if (team === 'Leads') query = "select B,I where E = 'Lead' or E = 'IG Manager' or F = 'µ'";
-    else if (team === 'All') query = "select B,I";
-    else if (team === 'Test') query = `select B,I where H = '${process.env.ADMIN_EMAIL}'`;
-    else query = `select B,I where F = '${team}' or F = 'µ'`;
+    // ---- Fetch team members from sheet (col 0: name, col 1: phone, col 2: email) ----
+    if (!process.env.SHEET_URL) return client.sendMessage(chatId, { text: 'Sheet URL not configured.' });
 
-    console.log(`${process.env.MEETING_MACRO_URL}?${params.toString()}`);
-    const [sheetResp, macroResp] = await Promise.all([
-        fetch(`${process.env.SHEET_URL}${encodeURIComponent(query)}`),
-        fetch(`${process.env.MEETING_MACRO_URL}?${params.toString()}`, { method: "GET" })
-    ]);
+    const sheetResp = await fetch(process.env.SHEET_URL + team);
+    if (!sheetResp.ok) return client.sendMessage(chatId, { text: 'Failed to fetch team data from sheet.' });
 
     const csvText = await sheetResp.text();
-    const rows = csvText.split('\n').slice(1);
+    const lines = csvText.split('\n').map(l => l.trim()).filter(l => l);
+    const startIndex = lines[0]?.toLowerCase().includes('name') || lines[0]?.toLowerCase().includes('phone') ? 1 : 0;
+
     const names: string[] = [];
     const phones: string[] = [];
+    const emails: string[] = [];
 
-    rows.forEach(row => {
-        const cols = row.replaceAll('"', '').split(',');
-        if (cols[0] && cols[1]) {
-            names.push(cols[0]);
-            phones.push(cols[1]);
-        }
-    });
+    for (let i = startIndex; i < lines.length; i++) {
+        const parts = lines[i].split(',').map(p => p.trim().replaceAll('"', ''));
+        if (parts[0]) names.push(parts[0]);
+        if (parts[1]) phones.push(parts[1]);
+        if (parts[2]) emails.push(parts[2]);
+    }
 
-    const mentions = phones.map(p => `${p}@s.whatsapp.net`);
-    const macroJson = await macroResp.json();
+    // ---- Call meeting macro with emails as individual params ----
+    if (!process.env.MEETING_MACRO_URL) return client.sendMessage(chatId, { text: 'Meeting macro URL not configured.' });
+
+    const params = new URLSearchParams({ name: title, dt: istDate.toISOString() });
+    for (const email of emails) params.append('emails', email);
+
+    console.log(`[meet] Calling macro: ${process.env.MEETING_MACRO_URL}?${params.toString()}`);
+    const macroResp = await fetch(`${process.env.MEETING_MACRO_URL}?${params.toString()}`);
+    const macroJson = await macroResp.json() as { link?: string; dt?: string; title?: string };
 
     if (!macroJson.link) {
         return client.sendMessage(chatId, { text: 'Could not generate meeting link.' });
     }
 
-    const dateStr = new Date(macroJson.dt).toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const timeStr = new Date(macroJson.dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    const message = `*${macroJson.title || 'Meeting'}*
+    const mentions = phones.map(p => `${p}@s.whatsapp.net`);
+    const dateStr = new Date(macroJson.dt!).toLocaleDateString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Kolkata' });
+    const timeStr = new Date(macroJson.dt!).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+    const message = `*${macroJson.title || title}*
 
 📆 *Date:* ${dateStr}
 ⏰ *Time:* ${timeStr.toUpperCase()}
@@ -101,19 +97,17 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
 👥 *Participants:*
 ${names.map(n => `* ${n}`).join('\n')}`;
 
-    // Read logo file
-    const logoPath = './assets/logo.jpg';
-    const thumbnail = await fs.readFile(logoPath);
+    const thumbnail = await fs.readFile('./assets/logo.jpg');
 
-    await client.sendMessage(chatId, { 
-        text: message, 
-        mentions, 
-        linkPreview: { 
+    await client.sendMessage(chatId, {
+        text: message,
+        mentions,
+        linkPreview: {
             title: macroJson.title || 'Meeting Scheduled',
             description: `@${timeStr.toUpperCase()} on ${dateStr}`,
-            "canonical-url": "Google Meet",
-            "matched-text": macroJson.link,
+            'canonical-url': 'Google Meet',
+            'matched-text': macroJson.link,
             jpegThumbnail: thumbnail
-        } 
+        }
     });
 };
