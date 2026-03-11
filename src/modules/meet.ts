@@ -48,7 +48,7 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
         `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(hours)}:${pad(minutes)}:00+05:30`
     );
 
-    const title = args[3] ? args[3].replaceAll('_', ' ') : 'Meeting';
+    const title = args[3] ? args[3].replaceAll('_', ' ') : 'μlearn UCEK - Meeting';
 
     // ---- Fetch team members from sheet (col 0: name, col 1: phone, col 2: email) ----
     if (!process.env.SHEET_URL) return client.sendMessage(chatId, { text: 'Sheet URL not configured.' });
