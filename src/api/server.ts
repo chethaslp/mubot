@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { WASocket } from '@whiskeysockets/baileys';
 import { verifyUser } from '../utils/db.js';
 import { getConfig, getAllConfigs, setConfig, deleteConfig, isGroupArchived, setGroupArchived, setModuleStatus, getModuleStatus } from '../utils/config.js';
+import { messageQueue } from '../queues/queue.js';
 import crypto from 'crypto';
 import os from 'os';
 
@@ -263,6 +264,40 @@ export const startServer = async (context: BotContext) => {
         } catch (error) {
             console.error(error);
             return reply.status(500).send({ error: 'Failed to send notification' });
+        }
+    });
+
+    app.post('/api/send-whatsapp', async (request, reply) => {
+        const token = (request.query as { token?: string }).token;
+
+        if (token !== process.env.API_TOKEN) {
+            return reply.status(403).send({ error: 'Invalid token' });
+        }
+
+        const { number, message } = (request.body || {}) as {
+            number?: string;
+            message?: string;
+        };
+
+        if (!number || !message) {
+            return reply.status(400).send({ error: 'Number and message are required' });
+        }
+
+        const normalizedNumber = String(number).replace(/\D/g, '');
+        if (!normalizedNumber) {
+            return reply.status(400).send({ error: 'Invalid phone number' });
+        }
+
+        try {
+            await messageQueue.add({
+                number: normalizedNumber,
+                message: String(message)
+            });
+
+            return reply.send({ status: 'queued' });
+        } catch (error) {
+            console.error('Failed to queue WhatsApp message:', error);
+            return reply.status(500).send({ error: 'Failed to queue message' });
         }
     });
 

@@ -98,5 +98,4 @@ class Queue {
 }
 
 export const messageQueue = new Queue('whatsapp-messages');
-export const ticketQueue = new Queue('whatsapp-tickets', { maxAttempts: 3, backoffDelay: 2000 });
 export const mailerQueue = new Queue('email-messages', { maxAttempts: 5, backoffDelay: 5000 });
