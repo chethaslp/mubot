@@ -9,32 +9,6 @@ import { getConfig } from '../utils/config.js';
 const notion = new NotionClient({ auth: process.env.NOTION_TOKEN });
 const NOTION_DB_ID = process.env.NOTION_BIRTHDAY_DB_ID!;
 
-/**
- * Returns the target birthday date to check against.
- *
- * The scheduler fires at 11:59 PM. "Next day" means tomorrow.
- * If execution slips past midnight (00:00–02:59), the "next day" is
- * still today's date — not the day after — so we don't skip a birthday.
- *
- * Logic:
- *   hour < 3  → execution ran just after midnight; target = today
- *   hour >= 3 → normal / 11:59 PM window; target = tomorrow
- */
-function getTargetBirthdayDate(): Date {
-    const now = new Date();
-    const target = new Date(now);
-
-    if (now.getHours() >= 3) {
-        // Running at or around 11:59 PM — next day is tomorrow
-        target.setDate(target.getDate() + 1);
-    }
-    // Hours 0-2: slipped past midnight, "next day" relative to last night's
-    // 11:59 PM trigger is still today's date — leave target as-is.
-
-    return target;
-}
-
-
 
 /** Extract the plain-text name from the 'Name' title property. */
 function extractName(properties: Record<string, any>): string {
@@ -164,11 +138,11 @@ export async function checkAndSendBirthdays(client: WASocket) {
         return;
     }
 
-    const target = getTargetBirthdayDate();
-    const targetMonth = target.getMonth() + 1; // 1-indexed
-    const targetDay = target.getDate();
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // 1-indexed
+    const currentDay = currentDate.getDate();
 
-    console.log(`[birthday] Checking for birthdays on ${targetMonth}/${targetDay} (${target.toDateString()})`);
+    console.log(`[birthday] Checking for birthdays on ${currentMonth}/${currentDay} (${currentDate.toDateString()})`);
 
     let pages: any[];
     try {
@@ -193,7 +167,7 @@ export async function checkAndSendBirthdays(client: WASocket) {
 
         // DOB is stored as YYYY-MM-DD; parse parts to avoid timezone shifts
         const [, month, day] = (dobProp.date.start as string).split('-').map(Number);
-        if (month !== targetMonth || day !== targetDay) continue;
+        if (month !== currentMonth || day !== currentDay) continue;
 
         // ------- Name -------
         const name = extractName(props);
@@ -207,9 +181,19 @@ export async function checkAndSendBirthdays(client: WASocket) {
         const cardBuffer = await buildBirthdayCard(name, photoBuffer);
 
         // ------- Send wish -------
-        const caption =
-            `🎂 *Happy Birthday, ${name}!* 🎉\n\n` +
-            `Wishing you a wonderful day filled with joy, laughter, and all the happiness you deserve! 🥳🎊`;
+        const captions = [
+            `🎂 *Happy Birthday, ${name}!* 🎉\n\nWishing you a wonderful day filled with joy, laughter, and all the happiness you deserve! 🥳🎊`,
+            `🎉 *Happy Birthday, ${name}!* 🎂\n\nMay your special day be full of beautiful moments and happy memories! Have a blast! 🎈🥳`,
+            `🥳 *Wishing you the happiest of birthdays, ${name}!* 🎉\n\nHope this year brings you success, peace, and endless joy! 🎁✨`,
+            `🎈 *Happy Birthday, ${name}!* 🎈\n\nSending you best wishes on your special day. May all your dreams come true! 🎂💫`,
+            `🎁 *Happy Birthday, ${name}!* 🎊\n\nCheers to another year of life! Have a fantastic day surrounded by your loved ones! 🥂✨`,
+            `✨ *Happy Birthday, ${name}!* 🎂\n\nWishing you an amazing year ahead filled with love, adventure, and success! Enjoy your day! 💖🎉`,
+            `🎊 *Happy Birthday, ${name}!* 🥳\n\nMay today be the start of a year filled with good luck, good health, and much happiness! 🎈🎁`,
+            `🎂 *Have a fantastic birthday, ${name}!* 🎉\n\nSending you smiles for every moment of your special day. Have a wonderful time! 🌟🥂`,
+            `🎉 *A very Happy Birthday to you, ${name}!* 🎂\n\nMay you be gifted with life's biggest joys and never-ending bliss! 💫🎈`,
+            `🚀 *Happy Level-Up Day, ${name}!* 🎂\n\nHere’s to celebrating you! May your day be as awesome as you are! 🎉🥳`
+        ];
+        const caption = captions[Math.floor(Math.random() * captions.length)];
 
         try {
             await client.sendMessage(channelId, {
@@ -224,14 +208,15 @@ export async function checkAndSendBirthdays(client: WASocket) {
     }
 
     if (wishCount === 0) {
-        console.log('[birthday] No birthdays tomorrow — nothing sent.');
+        console.log('[birthday] No birthdays today — nothing sent.');
     }
 }
 
 /** Call this once when the WhatsApp connection is established. */
 export function scheduleBirthdayChecker(client: WASocket) {
-    // Runs every day at 23:59:00 IST (Asia/Kolkata)
-    cron.schedule('59 23 * * *', async () => {
+    // Runs every day at 12:00 AM IST (Asia/Kolkata)
+    cron.getTasks().forEach(task => task.stop()); // Clear existing tasks to avoid duplicates
+    cron.schedule('0 0 * * *', async () => {
         console.log('[birthday] Cron triggered — running birthday check');
         try {
             await checkAndSendBirthdays(client);
@@ -239,7 +224,7 @@ export function scheduleBirthdayChecker(client: WASocket) {
             console.error('[birthday] Unexpected error during birthday check:', err);
         }
     }, { timezone: 'Asia/Kolkata' });
-    console.log('[birthday] Birthday cron scheduled for 23:59 every day');
+    console.log('[birthday] Birthday cron scheduled for 12:00 AM every day');
 }
 
 // Required export so the module loader picks it up (no commands to handle)
