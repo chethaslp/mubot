@@ -1,5 +1,6 @@
 import { WASocket, WAMessage, proto } from '@whiskeysockets/baileys';
 import { dbRun, dbAll, dbGet } from '../utils/db.js';
+import { getConfig } from '../utils/config.js';
 
 const BAN_COMMAND = '!ban';
 const UNBAN_COMMAND = '!unban';
@@ -74,14 +75,22 @@ export const handleMessage = async (client: WASocket, msg: WAMessage) => {
   
   // Handle ban/unban commands (admin only)
   if (body.startsWith(BAN_COMMAND) || body.startsWith(UNBAN_COMMAND)) {
-    const adminPhone = process.env.ADMIN_LID;
+    let adminPhone = await getConfig('ADMIN_LID');
     if (!adminPhone) {
-      console.error('ADMIN env var not set');
+      adminPhone = process.env.ADMIN_LID || null;
+    }
+    
+    const senderPhone = senderId.split('@')[0];
+
+    if (!adminPhone) {
+      console.error('ADMIN config/env var not set');
+      await client.sendMessage(chatId, { 
+        text: '❌ Admin not configured. Use !setAdmin first.' 
+      }, { quoted: msg });
       return;
     }
     
     // Check if sender is admin
-    const senderPhone = senderId.split('@')[0];
     if (senderPhone !== adminPhone) {
         console.log(`Unauthorized ban/unban attempt by ${senderPhone}`);
       await client.sendMessage(chatId, { 
