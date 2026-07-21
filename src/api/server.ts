@@ -10,6 +10,25 @@ import { messageQueue } from '../queues/queue.js';
 import crypto from 'crypto';
 import os from 'os';
 
+const isHttpUrl = (value: string): boolean => {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+};
+
+const inferFileNameFromUrl = (fileUrl: string): string => {
+    try {
+        const parsed = new URL(fileUrl);
+        const fromPath = path.basename(parsed.pathname);
+        return fromPath && fromPath !== '/' ? fromPath : 'attachment';
+    } catch {
+        return 'attachment';
+    }
+};
+
 const port = process.env.PORT || 3001;
 const sessions = new Map<string, number>();
 
@@ -298,6 +317,72 @@ export const startServer = async (context: BotContext) => {
         } catch (error) {
             console.error('Failed to queue WhatsApp message:', error);
             return reply.status(500).send({ error: 'Failed to queue message' });
+        }
+    });
+
+    app.post('/api/send-notify-update', async (request, reply) => {
+        const token = (request.query as { token?: string }).token;
+
+        if (token !== process.env.API_TOKEN) {
+            return reply.status(403).send({ error: 'Invalid token' });
+        }
+
+        const { text, attachment } = (request.body || {}) as {
+            text?: string;
+            attachment?: string | null;
+        };
+
+        if (!text || !String(text).trim()) {
+            return reply.status(400).send({ error: 'Text is required' });
+        }
+
+        if (attachment && !isHttpUrl(attachment)) {
+            return reply.status(400).send({ error: 'Attachment must be a valid http/https URL' });
+        }
+
+        const chatId = await getConfig('notify_update_channel');
+        if (!chatId) {
+            return reply.status(403).send({ error: 'Group notifications are disabled' });
+        }
+
+        const sock = context.getSock();
+        if (!sock) {
+            return reply.status(503).send({ error: 'Bot not connected' });
+        }
+
+        try {
+            const caption = String(text);
+
+            if (attachment) {
+                const response = await fetch(attachment);
+                if (!response.ok) {
+                    return reply.status(400).send({ error: `Failed to download attachment (${response.status})` });
+                }
+
+                const mimeType = (response.headers.get('content-type') || '').toLowerCase();
+                const inferredName = inferFileNameFromUrl(attachment);
+                const fileName = inferredName.toLowerCase().endsWith('.pdf') ? inferredName : `${inferredName}.pdf`;
+                const fileBuffer = Buffer.from(await response.arrayBuffer());
+                const isPdf = mimeType.includes('application/pdf') || inferredName.toLowerCase().endsWith('.pdf');
+
+                if (!isPdf) {
+                    return reply.status(400).send({ error: 'Attachment must be a PDF URL' });
+                }
+
+                await sock.sendMessage(chatId, {
+                    document: fileBuffer,
+                    fileName,
+                    mimetype: 'application/pdf',
+                    caption
+                });
+                return reply.send({ status: 'ok' });
+            }
+
+            await sock.sendMessage(chatId, { text: caption });
+            return reply.send({ status: 'ok' });
+        } catch (error) {
+            console.error('Failed to send group notification:', error);
+            return reply.status(500).send({ error: 'Failed to send group notification' });
         }
     });
 
